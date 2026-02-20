@@ -212,8 +212,10 @@ async function serveStaticFile(pathname, res) {
   let targetPath = pathname;
   if (targetPath === "/") targetPath = "/index.html";
 
-  const safePath = path.normalize(targetPath).replace(/^([.][.][/\\])+/, "");
-  const filePath = path.join(process.cwd(), safePath);
+  // Normalize to workspace-relative path (prevent absolute-path escape on Windows/Unix).
+  const normalized = path.posix.normalize(String(targetPath).replace(/\\/g, "/"));
+  const relPath = normalized.replace(/^\/+/, "").replace(/^(\.\.\/)+/, "") || "index.html";
+  const filePath = path.join(process.cwd(), relPath);
 
   if (!filePath.startsWith(process.cwd())) {
     sendJson(res, 403, { error: "Forbidden" });

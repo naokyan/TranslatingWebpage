@@ -2,8 +2,7 @@
   - type: web
     name: mobile-image-translator
     runtime: node
-    plan: free
-    buildCommand: ""
+    buildCommand: npm install
     startCommand: node server.js
     envVars:
       - key: GEMINI_API_KEY
