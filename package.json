@@ -1,0 +1,13 @@
+﻿{
+  "name": "mobile-image-translator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mobile web app: image translation, replacement rendering, and summary",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,75 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>翻译助手</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <h1 id="pageTitle">图片翻译</h1>
+      </header>
+
+      <main class="page-container">
+        <section class="page active" data-page="image-translate">
+          <div class="card">
+            <h2>上传或拍照</h2>
+            <p class="hint">支持从相册选择，或直接调用手机相机拍照。</p>
+            <label class="upload-btn" for="photoInput">选择照片 / 打开相机</label>
+            <input id="photoInput" class="hidden-input" type="file" accept="image/*" capture="environment" />
+          </div>
+
+          <div class="card hidden" id="previewCard">
+            <h2>原图</h2>
+            <img id="sourcePreview" alt="原图预览" />
+          </div>
+
+          <div class="card hidden" id="resultCard">
+            <h2>替换外文后的图片</h2>
+            <canvas id="resultCanvas"></canvas>
+            <a id="downloadBtn" class="download-btn" download="translated-image.png">下载结果图</a>
+          </div>
+
+          <div class="card hidden" id="textCard">
+            <h2>识别与翻译文本</h2>
+            <pre id="translatedText"></pre>
+          </div>
+
+          <div class="card hidden" id="summaryCard">
+            <h2>内容总结（大模型）</h2>
+            <p id="summaryText"></p>
+          </div>
+
+          <div class="card hidden" id="statusCard">
+            <h2>处理状态</h2>
+            <p id="statusText">等待上传图片</p>
+          </div>
+        </section>
+
+        <section class="page" data-page="voice-translate">
+          <div class="card">
+            <h2>语音翻译（预留）</h2>
+            <p class="hint">后续可接入录音、实时识别和翻译能力。</p>
+          </div>
+        </section>
+
+        <section class="page" data-page="settings">
+          <div class="card">
+            <h2>更多功能（预留）</h2>
+            <p class="hint">后续可放历史记录、词库、模型设置等。</p>
+          </div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav">
+        <button class="nav-btn active" data-target="image-translate">图片翻译</button>
+        <button class="nav-btn" data-target="voice-translate">语音翻译</button>
+        <button class="nav-btn" data-target="settings">更多</button>
+      </nav>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
