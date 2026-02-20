@@ -78,6 +78,8 @@ async function handleImageTranslate(req, res) {
   const prompt = [
     "你是图片翻译与信息总结助手。",
     "请识别图片中的外文文本，翻译成简体中文，并用于生成覆盖回原图的替换文本。",
+    "translatedBlocks 要尽量细分为每一行/每一小段，不要给过大的框。",
+    "每个框应紧贴原文字区域边界，减少空白边距，优先保证位置精确。",
     "必须只返回 JSON，不要返回 Markdown。",
     "返回字段格式：",
     "{",
@@ -92,7 +94,9 @@ async function handleImageTranslate(req, res) {
     "}",
     `其中 x/y/width/height 必须是像素坐标，基于原图尺寸 ${imageWidth}x${imageHeight}。`,
     "如果图片中没有明显外文，请 translatedBlocks 返回空数组，translatedText 简述原文主要信息，summary 说明无需翻译。",
-    "summary 要能告诉用户：这是什么类型内容，以及下一步需要做什么。",
+    "summary 要用第二人称“你”，告诉你：这是什么类型内容，以及下一步需要做什么。",
+    "summary 禁止出现流程性话术，例如“我已经为你翻译”“我已提供替换文本”“下一步你可以覆盖回原图”等。",
+    "summary 只输出内容结论与建议动作，不要描述系统做了什么。",
   ].join("\n");
 
   const geminiPayload = {
@@ -116,50 +120,21 @@ async function handleImageTranslate(req, res) {
     ],
   };
 
-  const modelCandidates = uniqueList([
-    MODEL,
-    "gemini-2.5-flash",
-    "gemini-flash-latest",
-  ]);
-
-  let raw = "";
-  let llmError = null;
-  for (const modelName of modelCandidates) {
-    const llmRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(geminiPayload),
-      }
-    );
-
-    raw = await llmRes.text();
-    if (llmRes.ok) {
-      llmError = null;
-      break;
-    }
-
-    const detail = safeJson(raw);
-    llmError = { status: llmRes.status, detail };
-    if (!isModelNotFoundError(llmRes.status, detail)) {
-      break;
-    }
-  }
-
-  if (llmError) {
-    sendJson(res, llmError.status, {
+  const textResult = await callGeminiWithFallback(
+    uniqueList([MODEL, "gemini-2.5-flash", "gemini-flash-latest"]),
+    geminiPayload
+  );
+  if (textResult.error) {
+    sendJson(res, textResult.error.status, {
       error: "Gemini API error",
-      detail: llmError.detail,
+      detail: textResult.error.detail,
     });
     return;
   }
 
   let modelJson;
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(textResult.raw || "{}");
     const content = parsed?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     modelJson = parseJsonSafely(content);
   } catch (err) {
@@ -176,7 +151,7 @@ async function handleImageTranslate(req, res) {
 
 function sanitizeModelOutput(data, imageWidth, imageHeight) {
   const translatedText = String(data?.translatedText || "").trim();
-  const summary = String(data?.summary || "").trim();
+  const summary = sanitizeSummaryText(String(data?.summary || "").trim(), translatedText);
   const blocks = Array.isArray(data?.translatedBlocks) ? data.translatedBlocks : [];
 
   const translatedBlocks = blocks
@@ -197,7 +172,7 @@ function sanitizeModelOutput(data, imageWidth, imageHeight) {
 
   return {
     translatedText: translatedText || "未识别到可翻译文本。",
-    summary: summary || "未生成总结。",
+    summary: summary || buildFallbackSummary(translatedText),
     translatedBlocks,
   };
 }
@@ -314,4 +289,99 @@ function isModelNotFoundError(status, detail) {
 
 function uniqueList(values) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function sanitizeSummaryText(text, translatedText) {
+  let out = String(text || "");
+
+  const splitRegex = /[。！？!?；;\n]/;
+  const sentences = out
+    .split(splitRegex)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const bannedKeywords = [
+    "翻译",
+    "替换",
+    "覆盖",
+    "原图",
+    "文本",
+    "识别",
+    "提取",
+    "模型",
+    "我已经",
+    "我已",
+    "我为你",
+    "下一步",
+    "这段中文",
+    "处理结果",
+  ];
+
+  const kept = sentences.filter((s) => !bannedKeywords.some((k) => s.includes(k)));
+  out = kept.join("。").trim();
+  if (out) out += "。";
+
+  if (!out || out.length < 8) {
+    return buildFallbackSummary(translatedText);
+  }
+
+  return out;
+}
+
+function buildFallbackSummary(translatedText) {
+  const t = String(translatedText || "");
+  if (!t) {
+    return "这是一段图片内容。建议你先确认关键信息，再决定下一步操作。";
+  }
+
+  const lower = t.toLowerCase();
+  if (hasAny(lower, ["menu", "dish", "price", "套餐", "菜单", "招牌", "价格"])) {
+    return "这是一份餐饮菜单信息。建议你重点看招牌菜、价格和是否有套餐。";
+  }
+  if (hasAny(lower, ["dear", "regards", "subject", "邮件", "收件", "发件", "附件"])) {
+    return "这是一条邮件类内容。建议你先看时间、主题和对你的具体要求。";
+  }
+  if (hasAny(lower, ["delivery", "package", "shipment", "包裹", "物流", "快递"])) {
+    return "这是一条物流通知。建议你核对时间、地址和签收要求。";
+  }
+  if (hasAny(lower, ["contract", "agreement", "条款", "合同", "协议"])) {
+    return "这是一份条款或协议内容。建议你重点确认责任、金额和截止时间。";
+  }
+
+  return "这是一段说明类内容。建议你关注时间、地点和需要你完成的事项。";
+}
+
+function hasAny(text, keywords) {
+  return keywords.some((k) => text.includes(String(k).toLowerCase()));
+}
+
+async function callGeminiWithFallback(modelCandidates, payload) {
+  let raw = "";
+  let error = null;
+
+  for (const modelName of modelCandidates) {
+    const llmRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    raw = await llmRes.text();
+    if (llmRes.ok) {
+      return { raw, modelName, error: null };
+    }
+
+    const detail = safeJson(raw);
+    error = { status: llmRes.status, detail };
+    if (!isModelNotFoundError(llmRes.status, detail)) {
+      break;
+    }
+  }
+
+  return { raw, error };
 }

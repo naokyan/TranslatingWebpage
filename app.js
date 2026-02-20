@@ -19,66 +19,62 @@ navButtons.forEach((btn) => {
 
 const photoInput = document.getElementById("photoInput");
 const sourcePreview = document.getElementById("sourcePreview");
-const resultCanvas = document.getElementById("resultCanvas");
+const resultPreview = document.getElementById("resultPreview");
 const translatedText = document.getElementById("translatedText");
 const summaryText = document.getElementById("summaryText");
-const statusText = document.getElementById("statusText");
 const downloadBtn = document.getElementById("downloadBtn");
 
 const previewCard = document.getElementById("previewCard");
 const resultCard = document.getElementById("resultCard");
 const textCard = document.getElementById("textCard");
 const summaryCard = document.getElementById("summaryCard");
-const statusCard = document.getElementById("statusCard");
 
 photoInput.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  show(statusCard);
   hide(resultCard);
   hide(textCard);
   hide(summaryCard);
 
-  setStatus("正在读取图片...");
-
   const rawDataUrl = await fileToDataUrl(file);
-  setStatus("正在优化图片大小...");
   const optimized = await normalizeImageForUpload(rawDataUrl);
 
   sourcePreview.src = optimized.previewDataUrl;
   await waitImageLoaded(sourcePreview);
   show(previewCard);
 
-  try {
-    setStatus("正在识别文字并翻译...");
+  const defaultTitle = pageTitles["image-translate"];
+  pageTitle.textContent = `${defaultTitle}（处理中）`;
 
+  try {
     const result = await runImageTranslatePipeline(
       optimized.uploadDataUrl,
       sourcePreview.naturalWidth,
       sourcePreview.naturalHeight
     );
 
-    setStatus("正在生成替换外文后的结果图...");
-    drawTranslatedImage(sourcePreview, result);
-
     translatedText.textContent = result.translatedText;
-    summaryText.textContent = result.summary;
+    summaryText.textContent = normalizeSummaryText(result.summary);
+
+    const finalImageDataUrl = getResultImageDataUrl(sourcePreview, result);
+    if (!result.translatedBlocks.length) {
+      translatedText.textContent = `${translatedText.textContent}\n\n（未检测到需要替换的外文，结果图显示为原图）`;
+    }
+
+    resultPreview.src = finalImageDataUrl;
+    downloadBtn.href = finalImageDataUrl;
 
     show(resultCard);
     show(textCard);
     show(summaryCard);
-
-    setStatus("完成");
   } catch (error) {
     console.error(error);
-    setStatus(error.message || "处理失败，请重试。可在控制台查看错误详情。");
+    alert(error.message || "处理失败，请重试");
+  } finally {
+    pageTitle.textContent = defaultTitle;
   }
 });
-
-function setStatus(text) {
-  statusText.textContent = text;
-}
 
 function show(el) {
   el.classList.remove("hidden");
@@ -120,42 +116,55 @@ async function runImageTranslatePipeline(imageDataUrl, imageWidth, imageHeight) 
   };
 }
 
-function drawTranslatedImage(imageEl, result) {
-  const ctx = resultCanvas.getContext("2d");
+function getResultImageDataUrl(sourceImageEl, result) {
+  if (!result.translatedBlocks.length) {
+    return sourceImageEl.currentSrc || sourceImageEl.src || "";
+  }
+
+  return drawOverlayToDataUrl(sourceImageEl, result.translatedBlocks);
+}
+
+function drawOverlayToDataUrl(imageEl, blocks) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
   const width = imageEl.naturalWidth;
   const height = imageEl.naturalHeight;
 
-  resultCanvas.width = width;
-  resultCanvas.height = height;
-
+  canvas.width = width;
+  canvas.height = height;
   ctx.drawImage(imageEl, 0, 0, width, height);
 
-  result.translatedBlocks.forEach((block) => {
-    ctx.fillStyle = "rgba(255,255,255,0.94)";
+  blocks.forEach((rawBlock) => {
+    const block = normalizeBlock(rawBlock, width, height);
+    if (!block) return;
+
+    ctx.fillStyle = "rgba(255,255,255,0.96)";
     ctx.fillRect(block.x, block.y, block.width, block.height);
 
-    ctx.strokeStyle = "#d3d8e6";
-    ctx.strokeRect(block.x, block.y, block.width, block.height);
+    const pad = getBlockPadding(block.height);
+    const textAreaWidth = Math.max(10, block.width - pad * 2);
+    const textAreaHeight = Math.max(10, block.height - pad * 2);
+    const layout = fitTextToBox(ctx, block.text, textAreaWidth, textAreaHeight);
 
-    const fontSize = calculateFontSize(block.height);
     ctx.fillStyle = "#111827";
-    ctx.font = `${fontSize}px sans-serif`;
+    ctx.font = `${layout.fontSize}px sans-serif`;
     ctx.textBaseline = "top";
 
-    const lines = wrapText(ctx, block.text, Math.max(block.width - 12, 20));
-    const lineHeight = Math.round(fontSize * 1.35);
-    const maxLines = Math.max(1, Math.floor((block.height - 10) / lineHeight));
+    const totalTextHeight = layout.lines.length * layout.lineHeight;
+    const startY = block.y + pad + Math.max(0, Math.floor((textAreaHeight - totalTextHeight) / 2));
 
-    lines.slice(0, maxLines).forEach((line, index) => {
-      ctx.fillText(line, block.x + 6, block.y + 6 + index * lineHeight);
+    layout.lines.forEach((line, index) => {
+      const lineWidth = ctx.measureText(line).width;
+      const startX = block.x + pad + Math.max(0, Math.floor((textAreaWidth - lineWidth) / 2));
+      ctx.fillText(line, startX, startY + index * layout.lineHeight);
     });
   });
 
-  downloadBtn.href = resultCanvas.toDataURL("image/png");
+  return canvas.toDataURL("image/png");
 }
 
 function wrapText(ctx, text, maxWidth) {
-  const chars = String(text || "").split("");
+  const chars = String(text || "").replace(/\s+/g, " ").trim().split("");
   const lines = [];
   let current = "";
 
@@ -173,9 +182,65 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-function calculateFontSize(blockHeight) {
-  const size = Math.round(blockHeight * 0.35);
-  return Math.max(14, Math.min(size, 42));
+function normalizeSummaryText(text) {
+  return String(text || "")
+    .replaceAll("用户", "你")
+    .replaceAll("使用者", "你")
+    .replaceAll("读者", "你");
+}
+
+function fitTextToBox(ctx, text, boxWidth, boxHeight) {
+  const maxFont = Math.max(16, Math.min(58, Math.floor(boxHeight * 0.7)));
+  const minFont = 12;
+  let best = null;
+
+  for (let size = maxFont; size >= minFont; size -= 1) {
+    ctx.font = `${size}px sans-serif`;
+    const lineHeight = Math.max(16, Math.round(size * 1.28));
+    const lines = wrapText(ctx, text, boxWidth);
+    const needHeight = lines.length * lineHeight;
+    if (needHeight <= boxHeight) {
+      best = { fontSize: size, lineHeight, lines };
+      break;
+    }
+  }
+
+  if (best) return best;
+
+  ctx.font = `${minFont}px sans-serif`;
+  const lineHeight = Math.max(16, Math.round(minFont * 1.28));
+  const maxLines = Math.max(1, Math.floor(boxHeight / lineHeight));
+  const lines = wrapText(ctx, text, boxWidth).slice(0, maxLines);
+  if (lines.length) {
+    lines[lines.length - 1] = shrinkLineWithEllipsis(ctx, lines[lines.length - 1], boxWidth);
+  }
+  return { fontSize: minFont, lineHeight, lines };
+}
+
+function shrinkLineWithEllipsis(ctx, line, maxWidth) {
+  let out = String(line || "");
+  while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) {
+    out = out.slice(0, -1);
+  }
+  return `${out}…`;
+}
+
+function normalizeBlock(rawBlock, imageWidth, imageHeight) {
+  const x = Math.max(0, Math.round(Number(rawBlock?.x) || 0));
+  const y = Math.max(0, Math.round(Number(rawBlock?.y) || 0));
+  const width = Math.max(1, Math.round(Number(rawBlock?.width) || 0));
+  const height = Math.max(1, Math.round(Number(rawBlock?.height) || 0));
+  const text = String(rawBlock?.text || "").trim();
+  if (!text) return null;
+
+  const fixedWidth = Math.min(width, imageWidth - x);
+  const fixedHeight = Math.min(height, imageHeight - y);
+  if (fixedWidth <= 0 || fixedHeight <= 0) return null;
+  return { x, y, width: fixedWidth, height: fixedHeight, text };
+}
+
+function getBlockPadding(blockHeight) {
+  return Math.max(4, Math.min(14, Math.round(blockHeight * 0.08)));
 }
 
 function fileToDataUrl(file) {
@@ -218,7 +283,7 @@ async function normalizeImageForUpload(dataUrl) {
   const ctx = canvas.getContext("2d");
   ctx.drawImage(img, 0, 0, width, height);
 
-  const uploadDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  const uploadDataUrl = canvas.toDataURL("image/jpeg", 0.88);
   return {
     uploadDataUrl,
     previewDataUrl: uploadDataUrl,

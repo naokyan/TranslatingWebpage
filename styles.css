@@ -1,11 +1,14 @@
 ﻿:root {
-  --bg: #f6f7fb;
+  --bg: #f3f7ff;
+  --bg2: #fff6ed;
   --surface: #ffffff;
-  --text: #101218;
-  --muted: #616777;
-  --line: #dde2ef;
-  --brand: #2563eb;
-  --brand-soft: #dbeafe;
+  --text: #0f172a;
+  --muted: #475569;
+  --line: #d6deee;
+  --brand: #0f5bd8;
+  --brand-strong: #0a45a8;
+  --brand-soft: #e3edff;
+  --shadow: 0 10px 26px rgba(20, 39, 82, 0.12);
 }
 
 * {
@@ -14,33 +17,37 @@
 
 body {
   margin: 0;
-  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  background: linear-gradient(180deg, #eef3ff 0%, var(--bg) 35%, #f9fafc 100%);
   color: var(--text);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:
+    radial-gradient(circle at 12% -5%, #d7e7ff 0%, transparent 42%),
+    radial-gradient(circle at 88% -18%, #ffe6c6 0%, transparent 38%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
 }
 
 .app-shell {
   min-height: 100dvh;
-  max-width: 760px;
+  max-width: 860px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  padding-bottom: calc(108px + env(safe-area-inset-bottom));
 }
 
 .app-header {
   position: sticky;
   top: 0;
-  background: rgba(246, 247, 251, 0.9);
-  backdrop-filter: blur(6px);
-  z-index: 5;
-  padding: 16px;
+  z-index: 9;
+  padding: 20px 18px;
+  background: rgba(243, 247, 255, 0.92);
+  backdrop-filter: blur(7px);
   border-bottom: 1px solid var(--line);
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 34px;
+  letter-spacing: 0.02em;
 }
 
 .page-container {
@@ -50,7 +57,7 @@ body {
 
 .page {
   display: none;
-  gap: 12px;
+  gap: 14px;
 }
 
 .page.active {
@@ -60,36 +67,42 @@ body {
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: var(--shadow);
 }
 
 .card h2 {
-  font-size: 16px;
-  margin: 0 0 8px;
+  margin: 0 0 12px;
+  font-size: 30px;
+  line-height: 1.25;
 }
 
 .hint {
+  margin: 0 0 14px;
   color: var(--muted);
-  margin: 0 0 12px;
-  line-height: 1.5;
+  line-height: 1.65;
+  font-size: 22px;
 }
 
 .upload-btn,
 .download-btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 62px;
+  padding: 12px 22px;
+  border-radius: 14px;
   border: 0;
-  border-radius: 10px;
-  padding: 10px 14px;
-  text-decoration: none;
-  cursor: pointer;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
   color: #fff;
-  background: var(--brand);
-  font-size: 14px;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 24px;
 }
 
 .download-btn {
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 .hidden-input,
@@ -98,25 +111,28 @@ body {
 }
 
 #sourcePreview,
-#resultCanvas {
+#resultPreview {
   width: 100%;
-  border-radius: 10px;
+  border-radius: 14px;
   border: 1px solid var(--line);
   background: #fff;
 }
 
 #translatedText {
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   background: var(--brand-soft);
-  border-radius: 10px;
-  padding: 10px;
-  margin: 0;
+  border-radius: 14px;
+  padding: 14px;
+  line-height: 1.65;
+  font-size: 22px;
 }
 
 #summaryText {
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.7;
+  font-size: 23px;
 }
 
 .bottom-nav {
@@ -124,13 +140,13 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 10;
-  max-width: 760px;
+  z-index: 12;
+  max-width: 860px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  gap: 10px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.95);
   border-top: 1px solid var(--line);
 }
@@ -138,15 +154,25 @@ body {
 .nav-btn {
   border: 1px solid var(--line);
   background: #fff;
-  border-radius: 10px;
-  padding: 10px 6px;
-  font-size: 13px;
   color: var(--text);
+  border-radius: 14px;
+  min-height: 64px;
+  font-size: 23px;
+  font-weight: 600;
 }
 
 .nav-btn.active {
   border-color: var(--brand);
-  color: var(--brand);
-  font-weight: 600;
   background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+@media (min-width: 860px) {
+  .app-header h1 {
+    font-size: 36px;
+  }
+
+  .card h2 {
+    font-size: 32px;
+  }
 }

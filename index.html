@@ -28,7 +28,7 @@
 
           <div class="card hidden" id="resultCard">
             <h2>替换外文后的图片</h2>
-            <canvas id="resultCanvas"></canvas>
+            <img id="resultPreview" alt="替换后的结果图" />
             <a id="downloadBtn" class="download-btn" download="translated-image.png">下载结果图</a>
           </div>
 
@@ -38,13 +38,8 @@
           </div>
 
           <div class="card hidden" id="summaryCard">
-            <h2>内容总结（大模型）</h2>
+            <h2>内容总结</h2>
             <p id="summaryText"></p>
-          </div>
-
-          <div class="card hidden" id="statusCard">
-            <h2>处理状态</h2>
-            <p id="statusText">等待上传图片</p>
           </div>
         </section>
 
